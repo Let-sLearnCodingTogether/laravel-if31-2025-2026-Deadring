@@ -23,19 +23,24 @@ class AuthController extends Controller
                     [
                         'message' => 'Email atau password salah',
                         'data' => null,
-                    ],401 );
+                    ],
+                    401
+                );
             }
 
-            $user = $request->user();
-            $token = $user->create_token('laravel APi', ['*'])->plainTextToken;
+            // Retrieve the authenticated user after successful attempt
+            $user = Auth::user();
+
+            // Create token - note the correct method name is createToken (camelCase)
+            $token = $user->createToken('laravel API', ['*'])->plainTextToken;
 
             return response()->json(
                 [
-                    'Message' => 'Login Berhasil',
+                    'message' => 'Login Berhasil',
                     'user' => $user,
                     'token' => $token,
                 ],
-                200,
+                200
             );
         } catch (Exception $e) {
             return response()->json(
@@ -43,7 +48,7 @@ class AuthController extends Controller
                     'message' => $e->getMessage(),
                     'data' => null,
                 ],
-                500,
+                500
             );
         }
     }
@@ -63,7 +68,7 @@ class AuthController extends Controller
                         'message' => 'Register berhasil',
                         'data' => $user,
                     ],
-                    201,
+                    201
                 );
             }
         } catch (Exception $e) {
@@ -72,15 +77,26 @@ class AuthController extends Controller
                     'message' => $e->getMessage(),
                     'data' => null,
                 ],
-                500,
+                500
             );
         }
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
         try {
+            // Correct access to current access token and delete it
+            $request->user()->currentAccessToken()->delete();
+
+            return response()->json([
+                'message' => 'Berhasil Logout',
+                'data' => null
+            ], 200);
         } catch (Exception $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'data' => null
+            ], 500);
         }
     }
 }
