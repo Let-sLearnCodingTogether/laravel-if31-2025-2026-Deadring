@@ -3,14 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreSpotRequest;
+use App\Http\Requests\UpdateSpotRequest;
 use App\Models\Category;
 use App\Models\Spot;
 use Exception;
-use Illuminate\Auth\Events\Validated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Storage;
+
+use function Pest\Laravel\call;
 
 class SpotController extends Controller
 {
@@ -19,7 +21,29 @@ class SpotController extends Controller
      */
     public function index()
     {
-        //
+        try {
+            $spot = Spot::with([
+                'user:id,name',
+                'catgories:catagory,spot_id'
+            ])
+            ->withCount([
+                'reviews'
+            ])
+            ->withSum('reviews','rating')
+            ->orderBy('created_at', 'desc')
+            ->paginate(request('size',10));
+
+            return Response::json([
+                'message' => "List Sport",
+                'data' => $spot
+            ], 200);
+        } catch (Exception $e) {
+            return Response::json([
+                'message' => $e->getMessage(),
+                'data' => null
+            ], 500);
+
+        }
     }
 
     /**
@@ -35,40 +59,32 @@ class SpotController extends Controller
      */
     public function store(StoreSpotRequest $request)
     {
-        try{
-            $validated = $request ->safe()->all();
-
+        try {
+            $validated = $request->safe()->all();
             $picture_path = Storage::disk('public')->putFile('spots', $request->file('picture'));
-
             $validated['user_id'] = Auth::user()->id;
             $validated['picture'] = $picture_path;
-
-            $spot = Spot::created($validated);
-
-            if($spot){
+            $spot = Spot::create($validated);
+            if ($spot) {
                 $categories = [];
-
-                foreach($validated['category'] as $category){
+                foreach ($validated['category'] as $category) {
                     $categories[] = [
                         'spot_id' => $spot->id,
                         'category' => $category
                     ];
-                    }
-
-                    Category::fillAndInsert($categories);
-
-                    return Response::json([
-                        'message' => 'Berhasil Menyimpan Spot',
-                        'data' => null
-                    ], 201);
                 }
-
-        } catch(Exception $e){
-            return response()->json([
+                Category::fillAndInsert($categories);
+                return Response::json([
+                    'message' => 'Spot Berhasil',
+                    'data' => null
+                ], 201);
+            }
+        } catch (Exception $e) {
+            return Response::json([
                 'message' => $e->getMessage(),
                 'data' => null
             ], 500);
-        };
+        }
     }
 
     /**
@@ -76,7 +92,23 @@ class SpotController extends Controller
      */
     public function show(Spot $spot)
     {
-        //
+        try {
+            return Response::json([
+                'message' => "Detail Sport",
+                'data' => $spot->load([
+                    'user:id,name',
+                    'catgories:catagory,spot_id'
+                ])
+                ->loadCount(['reviews'])
+                ->loadSum('reviews','rating')
+            ], 200);
+
+        } catch (Exception $e) {
+            return Response::json([
+                'message' => $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
     }
 
     /**
@@ -90,9 +122,37 @@ class SpotController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Spot $spot)
+    public function update(UpdateSpotRequest $request, Spot $spot)
     {
-        //
+        try {
+            $validated = $request->safe()->all();
+
+            if(isset($validated['picture'])){
+                $picture_path = Storage::disk('public')->putFile('spot',$request->file('picture'));
+            }
+
+             if(isset($validated['category'])){
+                $categories = [];
+                foreach ($validated['category'] as $category) {
+                    $categories[] = [
+                        'spot_id' => $spot->id,
+                        'category' => $category
+                    ];
+                }
+                Category::fillAndInsert($categories);
+            }
+
+            $spot->update([
+                'name'=> $validated['name'],
+                'picture' => $picture_path ?? $spot->picture,
+                'address' => $validated['address']
+            ]);
+        } catch (Exception $e) {
+            return Response::json([
+                'message' => $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
     }
 
     /**
@@ -100,6 +160,27 @@ class SpotController extends Controller
      */
     public function destroy(Spot $spot)
     {
-        //
+        try {
+            $user = Auth::user();
+
+            if($spot->user_id == $user->id || $user->role == 'ADMIN'){
+                if($spot->delete()){
+                    return Response::json([
+                        'message' => 'Spot berhasil di hapus',
+                        'data' => null
+                    ], 200);
+                }
+            }else {
+                return Response::json([
+                        'message' => 'Spot gagal di hapus',
+                        'data' => null
+                    ], 200);
+            }
+        } catch (Exception $e) {
+            return Response::json([
+                'message' => $e->getMessage(),
+                'data' => null
+            ], 500);
+        }
     }
 }
